@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import SearchBar from './SearchBar';
 import UploadPanel from './UploadPanel';
 import ResultsGrid from './ResultsGrid';
 import './App.css';
+
+const API_BASE = 'http://localhost:8000';
 
 // Particles
 function Particles() {
@@ -49,7 +52,8 @@ function Toast({ toasts }) {
 function App() {
   const [mode, setMode] = useState('doc');
   const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
   const toastId = useRef(0);
@@ -67,47 +71,61 @@ function App() {
     }, 3500);
   };
 
+  // ── Document Search ─────────────────────────────────
   const handleDocSearch = async (query) => {
-    setLoading(true);
+    setIsLoading(true);
     setResults([]);
     try {
-      const res = await fetch(`http://localhost:8000/api/search/docs?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setResults(data.results || []);
-      addToast(`✅ Found ${data.results.length} results`, 'success');
+      const res = await axios.get(`${API_BASE}/api/search/docs`, {
+        params: { query },
+      });
+      setResults(res.data.results || []);
+      addToast(`✅ Found ${res.data.results.length} results`, 'success');
     } catch (e) {
-      addToast('⚠️ Backend not connected — showing dummy results', 'warning');
-      setResults([
-        { filename: 'project_budget.pdf', snippet: 'Project Alpha Budget 9195...', score: 95.2 },
-        { filename: 'meeting_notes.docx', snippet: 'Discussion about Q3 targets...', score: 87.1 },
-        { filename: 'report.txt', snippet: 'Annual report summary...', score: 76.5 },
-      ]);
+      if (e.response?.status === 503) {
+        addToast('⚠️ Index not built yet. Please index a folder first.', 'warning');
+      } else {
+        addToast('⚠️ Backend not connected. Is the server running?', 'warning');
+      }
     }
-    setLoading(false);
+    setIsLoading(false);
   };
 
+  // ── Face Search ─────────────────────────────────────
   const handleFaceSearch = async (file) => {
-    setLoading(true);
+    setIsLoading(true);
     setResults([]);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('http://localhost:8000/api/search/faces', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-      setResults(data.results || []);
-      addToast(`✅ Found ${data.results.length} matching faces`, 'success');
+      const res = await axios.post(`${API_BASE}/api/search/faces`, formData);
+      setResults(res.data.results || []);
+      addToast(`✅ Found ${res.data.results.length} matching faces`, 'success');
     } catch (e) {
-      addToast('⚠️ Backend not connected — showing dummy results', 'warning');
-      setResults([
-        { filename: 'photo_001.jpg', score: 98.5 },
-        { filename: 'photo_045.jpg', score: 94.2 },
-        { filename: 'photo_112.jpg', score: 88.7 },
-      ]);
+      addToast('⚠️ Backend not connected. Is the server running?', 'warning');
     }
-    setLoading(false);
+    setIsLoading(false);
+  };
+
+  // ── Index Folder ────────────────────────────────────
+  const handleIndexFolder = async () => {
+    const folderPath = prompt('Enter the full path to the folder to index:');
+    if (!folderPath || !folderPath.trim()) return;
+
+    setIsIndexing(true);
+    addToast('📂 Indexing started...', 'info');
+    try {
+      const res = await axios.post(`${API_BASE}/api/index`, {
+        folder_path: folderPath.trim(),
+      });
+      addToast(
+        `✅ Indexed ${res.data.photos_indexed} photos & ${res.data.docs_indexed} docs`,
+        'success'
+      );
+    } catch (e) {
+      addToast('⚠️ Indexing failed. Check the folder path.', 'warning');
+    }
+    setIsIndexing(false);
   };
 
   return (
@@ -115,7 +133,7 @@ function App() {
       <Particles />
 
       {/* Dark/Light Toggle */}
-      <button className="theme-btn" onClick={() => setDarkMode(!darkMode)}>
+      <button id="theme-toggle" className="theme-btn" onClick={() => setDarkMode(!darkMode)}>
         {darkMode ? '☀️' : '🌙'}
       </button>
 
@@ -127,12 +145,14 @@ function App() {
 
         <div className="toggle">
           <button
+            id="doc-search-tab"
             className={mode === 'doc' ? 'active' : ''}
             onClick={() => { setMode('doc'); setResults([]); }}
           >
             📄 Document Search
           </button>
           <button
+            id="face-search-tab"
             className={mode === 'face' ? 'active' : ''}
             onClick={() => { setMode('face'); setResults([]); }}
           >
@@ -142,23 +162,23 @@ function App() {
 
         <div className="search-panel">
           {mode === 'doc'
-            ? <SearchBar onSearch={handleDocSearch} />
-            : <UploadPanel onSearch={handleFaceSearch} />
+            ? <SearchBar onSearch={handleDocSearch} isLoading={isLoading} />
+            : <UploadPanel onSearch={handleFaceSearch} isLoading={isLoading} />
           }
         </div>
 
-        {loading && (
+        {isLoading && (
           <div className="loading">
             <div className="spinner" />
             Searching...
           </div>
         )}
 
-        {!loading && results.length > 0 && (
+        {!isLoading && results.length > 0 && (
           <ResultsGrid results={results} mode={mode} />
         )}
 
-        {!loading && results.length === 0 && (
+        {!isLoading && results.length === 0 && (
           <div className="empty">
             {mode === 'doc'
               ? '💬 Type what you remember to find your document'
@@ -166,6 +186,16 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Index Folder FAB */}
+      <button
+        id="index-folder-btn"
+        className="fab"
+        onClick={handleIndexFolder}
+        disabled={isIndexing}
+      >
+        {isIndexing ? '⏳' : '📁'} {isIndexing ? 'Indexing...' : 'Index Folder'}
+      </button>
 
       <Toast toasts={toasts} />
     </>

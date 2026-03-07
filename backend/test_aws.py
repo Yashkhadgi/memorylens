@@ -34,7 +34,7 @@ try:
 except Exception as e:
     print(f"❌ Textract failed: {e}")
 
-# Test 3 — Bedrock Claude Sonnet 4
+# Test 3 — Bedrock Nova Lite
 try:
     bedrock = boto3.client(
         'bedrock-runtime',
@@ -43,17 +43,21 @@ try:
         aws_secret_access_key=os.getenv('BEDROCK_SECRET_KEY')
     )
     response = bedrock.invoke_model(
-        modelId='us.anthropic.claude-sonnet-4-20250514-v1:0',
+        modelId='us.amazon.nova-lite-v1:0',
         body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": "say hi"}]
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"text": "say hi"}]
+                }
+            ]
         })
     )
     result = json.loads(response['body'].read())
-    print("✅ Bedrock Claude 4 — connected:", result['content'][0]['text'])
+    text = result['output']['message']['content'][0]['text']
+    print(f"✅ Bedrock Nova Lite — connected: {text}")
 except Exception as e:
-    print(f"❌ Bedrock Claude failed: {e}")
+    print(f"❌ Bedrock Nova failed: {e}")
 
 # Test 4 — Bedrock Titan Embeddings V2
 try:

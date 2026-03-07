@@ -6,3 +6,5 @@ node_modules/
 .DS_Store
 *.faiss
 *.pkl
+docs.db
+docs.index
