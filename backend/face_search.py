@@ -20,6 +20,15 @@ class FaceSearcher:
         )
         self.collection_id = os.getenv("REKOGNITION_COLLECTION_ID", "memorylens")
 
+    def get_total_faces(self) -> int:
+        """Returns the total number of faces indexed in the collection."""
+        try:
+            response = self.client.describe_collection(CollectionId=self.collection_id)
+            return response.get("FaceCount", 0)
+        except Exception as e:
+            logger.error(f"Error getting collection face count: {e}")
+            return 0
+
     def search_by_face(
         self, image_bytes: bytes, threshold: float = 80.0
     ) -> list[dict]:
@@ -41,11 +50,21 @@ class FaceSearcher:
                 MaxFaces=50,
             )
 
+            import base64
             results = []
             for match in response.get("FaceMatches", []):
                 face = match["Face"]
+                ext_id = face.get("ExternalImageId", "")
+                
+                # Decode Base64URL back to the exact original file path
+                try:
+                    padding = '=' * (4 - (len(ext_id) % 4))
+                    file_path = base64.urlsafe_b64decode(ext_id + padding).decode('utf-8')
+                except Exception:
+                    file_path = ext_id # Fallback if it wasn't base64 encoded
+
                 results.append({
-                    "file_path": face["ExternalImageId"],
+                    "file_path": file_path,
                     "similarity": round(match["Similarity"], 2),
                     "face_id": face["FaceId"],
                 })

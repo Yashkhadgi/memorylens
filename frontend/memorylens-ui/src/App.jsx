@@ -49,19 +49,71 @@ function Toast({ toasts }) {
   );
 }
 
+// Progress Bar
+function IndexProgress({ progress }) {
+  if (!progress || (!progress.is_running && !progress.done)) return null;
+
+  const percent = progress.total > 0
+    ? Math.round((progress.processed / progress.total) * 100)
+    : 0;
+
+  return (
+    <div className="index-progress">
+      <div className="progress-header">
+        <span className="progress-title">
+          {progress.done ? '✅ Indexing Complete' : '📸 Indexing Photos...'}
+        </span>
+        <span className="progress-count">
+          {progress.processed} / {progress.total} photos
+        </span>
+      </div>
+
+      <div className="progress-bar-track">
+        <div
+          className={`progress-bar-fill ${progress.done ? 'done' : ''}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      <div className="progress-details">
+        <span className="progress-percent">{percent}%</span>
+        {progress.done && (
+          <span className="progress-stats">
+            ✅ {progress.indexed} indexed · ⏭️ {progress.skipped} skipped · ❌ {progress.errors} errors
+          </span>
+        )}
+      </div>
+
+      {progress.message && (
+        <p className="progress-message">{progress.message}</p>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState('doc');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [indexProgress, setIndexProgress] = useState(null);
+  const [searchStats, setSearchStats] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
   const toastId = useRef(0);
+  const pollRef = useRef(null);
 
   // Apply dark/light mode to body
   useEffect(() => {
     document.body.classList.toggle('light', !darkMode);
   }, [darkMode]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const addToast = (message, type = 'warning') => {
     const id = toastId.current++;
@@ -71,10 +123,37 @@ function App() {
     }, 3500);
   };
 
+  // ── Poll indexing progress ──────────────────────────
+  const startPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/api/index/progress`);
+        const data = res.data;
+        setIndexProgress(data);
+
+        // Stop polling when done
+        if (data.done) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setIsIndexing(false);
+          addToast(
+            `✅ Indexed ${data.indexed} photos (${data.skipped} skipped, ${data.errors} errors)`,
+            'success'
+          );
+        }
+      } catch {
+        // Backend might not be ready yet, keep polling
+      }
+    }, 500); // Poll every 500ms
+  };
+
   // ── Document Search ─────────────────────────────────
   const handleDocSearch = async (query) => {
     setIsLoading(true);
     setResults([]);
+    setSearchStats(null);
     try {
       const res = await axios.get(`${API_BASE}/api/search/docs`, {
         params: { query },
@@ -95,12 +174,14 @@ function App() {
   const handleFaceSearch = async (file) => {
     setIsLoading(true);
     setResults([]);
+    setSearchStats(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
       const res = await axios.post(`${API_BASE}/api/search/faces`, formData);
       setResults(res.data.results || []);
-      addToast(`✅ Found ${res.data.results.length} matching faces`, 'success');
+      setSearchStats(res.data.stats || null);
+      addToast(`✅ Found ${res.data.results?.length || 0} matching faces`, 'success');
     } catch (e) {
       addToast('⚠️ Backend not connected. Is the server running?', 'warning');
     }
@@ -109,23 +190,36 @@ function App() {
 
   // ── Index Folder ────────────────────────────────────
   const handleIndexFolder = async () => {
-    const folderPath = prompt('Enter the full path to the folder to index:');
-    if (!folderPath || !folderPath.trim()) return;
+    addToast('🗂️ Please select a folder in the popup window...', 'info');
 
-    setIsIndexing(true);
-    addToast('📂 Indexing started...', 'info');
     try {
-      const res = await axios.post(`${API_BASE}/api/index`, {
+      // 1. Ask backend to open native folder picker
+      const dialogRes = await axios.get(`${API_BASE}/api/select-folder`);
+      const folderPath = dialogRes.data.folder_path;
+
+      if (!folderPath) {
+        addToast('Selection canceled.', 'info');
+        return;
+      }
+
+      setIsIndexing(true);
+      setIndexProgress({ is_running: true, processed: 0, total: 0, done: false, message: 'Starting...' });
+
+      // 2. Start indexing with the selected path
+      await axios.post(`${API_BASE}/api/index`, {
         folder_path: folderPath.trim(),
       });
-      addToast(
-        `✅ Indexed ${res.data.photos_indexed} photos & ${res.data.docs_indexed} docs`,
-        'success'
-      );
+      // Start polling for progress
+      startPolling();
     } catch (e) {
-      addToast('⚠️ Indexing failed. Check the folder path.', 'warning');
+      setIsIndexing(false);
+      setIndexProgress(null);
+      if (e.response?.status === 409) {
+        addToast('⚠️ Indexing already in progress!', 'warning');
+      } else {
+        addToast('⚠️ Failed to start indexing.', 'warning');
+      }
     }
-    setIsIndexing(false);
   };
 
   return (
@@ -143,18 +237,21 @@ function App() {
           <p>Search your files by face or memory</p>
         </div>
 
+        {/* Indexing Progress Bar */}
+        <IndexProgress progress={indexProgress} />
+
         <div className="toggle">
           <button
             id="doc-search-tab"
             className={mode === 'doc' ? 'active' : ''}
-            onClick={() => { setMode('doc'); setResults([]); }}
+            onClick={() => { setMode('doc'); setResults([]); setSearchStats(null); }}
           >
             📄 Document Search
           </button>
           <button
             id="face-search-tab"
             className={mode === 'face' ? 'active' : ''}
-            onClick={() => { setMode('face'); setResults([]); }}
+            onClick={() => { setMode('face'); setResults([]); setSearchStats(null); }}
           >
             📸 Face Search
           </button>
@@ -171,6 +268,23 @@ function App() {
           <div className="loading">
             <div className="spinner" />
             Searching...
+          </div>
+        )}
+
+        {!isLoading && searchStats && mode === 'face' && (
+          <div className="search-stats-container">
+            <div className="stat-card">
+              <span className="stat-value">{searchStats.total_indexed}</span>
+              <span className="stat-label">Total Indexed</span>
+            </div>
+            <div className="stat-card match">
+              <span className="stat-value">{searchStats.found}</span>
+              <span className="stat-label">Matches Found</span>
+            </div>
+            <div className="stat-card no-match">
+              <span className="stat-value">{searchStats.not_match}</span>
+              <span className="stat-label">Did Not Match</span>
+            </div>
           </div>
         )}
 
