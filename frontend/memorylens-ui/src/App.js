@@ -121,6 +121,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
+  const [query, setQuery] = useState('');  // ← NEW
   const toastId = useRef(0);
 
   useEffect(() => {
@@ -135,11 +136,12 @@ function App() {
     }, 3500);
   };
 
-  const handleDocSearch = async (query) => {
+  const handleDocSearch = async (q) => {
+    setQuery(q);  // ← NEW
     setLoading(true);
     setResults([]);
     try {
-      const res = await fetch(`http://localhost:8000/api/search/docs?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`http://localhost:8000/api/search/docs?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setResults(data.results || []);
       addToast(`✅ Found ${data.results.length} results`, 'success');
@@ -155,6 +157,7 @@ function App() {
   };
 
   const handleFaceSearch = async (file) => {
+    setQuery(file.name);  // ← NEW
     setLoading(true);
     setResults([]);
     try {
@@ -240,7 +243,7 @@ function App() {
         )}
 
         {!loading && results.length > 0 && (
-          <ResultsGrid results={results} mode={mode} />
+          <ResultsGrid results={results} mode={mode} query={query} />  // ← query prop added
         )}
 
         {!loading && results.length === 0 && (
