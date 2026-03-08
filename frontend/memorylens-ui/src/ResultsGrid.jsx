@@ -23,14 +23,14 @@ function ResultsGrid({ results, mode, query }) {
 
   // F2/F5 — Spotlight links
   const docLinks = [
-    { icon: '🔍', label: 'Google',    url: `https://google.com/search?q=${encodeURIComponent(query || '')}` },
+    { icon: '🔍', label: 'Google', url: `https://google.com/search?q=${encodeURIComponent(query || '')}` },
     { icon: '📖', label: 'Wikipedia', url: `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query || '')}` },
-    { icon: '🤖', label: 'ChatGPT',   url: `https://chatgpt.com/?q=${encodeURIComponent(query || '')}` },
+    { icon: '🤖', label: 'ChatGPT', url: `https://chatgpt.com/?q=${encodeURIComponent(query || '')}` },
   ];
   const faceLinks = [
     { icon: '🔍', label: 'Google Images', url: `https://images.google.com/search?tbm=isch&q=${encodeURIComponent(query || '')}` },
-    { icon: '🤖', label: 'ChatGPT',       url: `https://chatgpt.com/?q=${encodeURIComponent(query || '')}` },
-    { icon: '📸', label: 'Pinterest',     url: `https://pinterest.com/search/pins/?q=${encodeURIComponent(query || '')}` },
+    { icon: '🤖', label: 'ChatGPT', url: `https://chatgpt.com/?q=${encodeURIComponent(query || '')}` },
+    { icon: '📸', label: 'Pinterest', url: `https://pinterest.com/search/pins/?q=${encodeURIComponent(query || '')}` },
   ];
   const links = mode === 'face' ? faceLinks : docLinks;
 

@@ -110,7 +110,7 @@ function IndexPanel({ onIndexComplete }) {
           className="browse-btn"
           disabled={indexing}
         >
-        Browse
+          Browse
         </button>
         <button
           onClick={handleStartIndex}
