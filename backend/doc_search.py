@@ -86,9 +86,11 @@ def search_documents(query: str, doc_index, doc_meta, top_k: int = 5) -> list:
 
         snippet = find_best_snippet(meta.get('full_text', meta['snippet']), keywords)
 
+        # Fix 1: Only show results above 15% relevance
         final_score = round(score * 100, 1)
         if final_score < 15:
             continue
+
         results.append({
             "path": meta['path'],
             "filename": meta['filename'],
@@ -107,7 +109,7 @@ def find_best_snippet(text: str, keywords: list, snippet_len: int = 300) -> str:
     best_pos = 0
     best_count = 0
 
-    for i in range(0, len(text) - snippet_len, 50):
+    for i in range(0, max(1, len(text) - snippet_len), 50):
         chunk = text_lower[i:i + snippet_len]
         count = sum(1 for kw in keywords if kw.lower() in chunk)
         if count > best_count:
