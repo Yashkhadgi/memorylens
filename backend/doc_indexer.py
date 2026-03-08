@@ -53,6 +53,14 @@ def extract_text_local(file_path: str) -> str:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 return f.read()
 
+        elif path.suffix.lower() == '.md':
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+
+        elif path.suffix.lower() == '.csv':
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+
         else:
             return ""
     except Exception as e:
@@ -107,8 +115,9 @@ def index_single_doc(file_path: str):
     # Step 1: Extract text
     text = extract_text_local(file_path)
 
-    # Step 2: Fallback to Textract if local extraction empty
-    if len(text.strip()) < 50:
+    # Step 2: Fallback to Textract ONLY if local extraction completely empty
+    # Changed from 50 to 10 — fixes TXT files with short content
+    if len(text.strip()) < 10:
         print(f"  → Using Textract for: {file_path}")
         text = extract_text_textract(file_path)
 
@@ -140,6 +149,10 @@ def index_single_doc(file_path: str):
 def index_docs_folder(folder_path: str):
     """Index all documents in a folder"""
     global doc_index, doc_meta
+
+    # Reset index for fresh indexing
+    doc_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+    doc_meta = []
 
     folder = Path(folder_path)
     doc_extensions = {'.pdf', '.docx', '.doc', '.txt', '.md', '.csv'}
