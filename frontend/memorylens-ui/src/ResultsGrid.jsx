@@ -4,7 +4,7 @@ function ResultsGrid({ results, mode, query }) {
   const handleOpen = async (filepath) => {
     if (!filepath) return;
     try {
-      await fetch(`http://localhost:8000/api/open-file?path=${encodeURIComponent(filepath)}`);
+      await fetch(`/api/open-file?path=${encodeURIComponent(filepath)}`);
     } catch (e) {
       console.log('Backend not connected');
     }

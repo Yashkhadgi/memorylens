@@ -5,7 +5,7 @@ import UploadPanel from './UploadPanel';
 import ResultsGrid from './ResultsGrid';
 import './App.css';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = ''; // Use relative paths for unified deployment
 
 // Particles
 function Particles() {

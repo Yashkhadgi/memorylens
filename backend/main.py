@@ -10,6 +10,8 @@ import platform
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -304,3 +306,20 @@ def web_search_links(q: str, mode: str = "doc"):
         "mode": mode,
         "links": face_links if mode == "face" else doc_links
     }
+
+# ── Serve Frontend ───────────────────────────────────────
+# 1. Mount the static directory for CSS/JS/Images
+# Note: CRA puts assets in build/static, which we copied to backend/static
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static", "static")), name="static_assets")
+
+# 2. Serve the index.html for the root and any other non-API routes
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    # Only serve index.html if the path doesn't start with /api
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="API route not found")
+    
+    index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "Frontend build not found. Run 'npm run build' first."}

@@ -9,7 +9,7 @@ function IndexPanel({ onIndexComplete }) {
 
   const handleSelectFolder = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/select-folder');
+      const res = await fetch('/api/select-folder');
       const data = await res.json();
       if (data.folder_path) setFolderPath(data.folder_path);
     } catch (e) {
@@ -24,7 +24,7 @@ function IndexPanel({ onIndexComplete }) {
     setProgress(null);
 
     try {
-      await fetch('http://localhost:8000/api/index', {
+      await fetch('/api/index', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: folderPath }),
@@ -39,7 +39,7 @@ function IndexPanel({ onIndexComplete }) {
   const startPolling = () => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/index/progress');
+        const res = await fetch('/api/index/progress');
         const data = await res.json();
         setProgress(data);
         if (data.done) {

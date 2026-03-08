@@ -141,7 +141,7 @@ function App() {
     setLoading(true);
     setResults([]);
     try {
-      const res = await fetch(`http://localhost:8000/api/search/docs?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/search/docs?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setResults(data.results || []);
       addToast(`✅ Found ${data.results.length} results`, 'success');
@@ -163,7 +163,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('http://localhost:8000/api/search/faces', {
+      const res = await fetch('/api/search/faces', {
         method: 'POST',
         body: formData
       });
