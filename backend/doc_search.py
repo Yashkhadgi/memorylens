@@ -86,11 +86,14 @@ def search_documents(query: str, doc_index, doc_meta, top_k: int = 5) -> list:
 
         snippet = find_best_snippet(meta.get('full_text', meta['snippet']), keywords)
 
+        final_score = round(score * 100, 1)
+        if final_score < 15:
+            continue
         results.append({
             "path": meta['path'],
             "filename": meta['filename'],
             "snippet": snippet,
-            "score": round(score * 100, 1)
+            "score": final_score
         })
 
     return results
