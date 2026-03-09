@@ -177,19 +177,40 @@ def health_check():
 # ── Select Folder Dialog ─────────────────────────────────
 @app.get("/api/select-folder")
 def select_folder():
-    """Opens a native OS folder selection dialog via a fresh process."""
-    script = (
-        "import tkinter as tk, tkinter.filedialog as fd;\n"
-        "root = tk.Tk()\n"
-        "root.withdraw()\n"
-        "root.attributes('-topmost', True)\n"
-        "print(fd.askdirectory(title='Select Folder to Index'))\n"
-    )
+    """Opens a native OS folder selection dialog.
+    Uses AppleScript on macOS (tkinter doesn't work reliably on Mac),
+    and tkinter on Windows/Linux.
+    """
+    system = platform.system()
+
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", script], capture_output=True, text=True
-        )
-        return {"folder_path": result.stdout.strip()}
+        if system == "Darwin":
+            # macOS: Use AppleScript — tkinter fails in subprocess on Mac
+            result = subprocess.run(
+                [
+                    "osascript", "-e",
+                    'set theFolder to POSIX path of (choose folder with prompt "Select Folder to Index")',
+                ],
+                capture_output=True, text=True, timeout=120,
+            )
+            folder = result.stdout.strip()
+            # User cancelled → osascript returns error, stdout is empty
+            return {"folder_path": folder}
+
+        else:
+            # Windows / Linux: Use tkinter
+            script = (
+                "import tkinter as tk, tkinter.filedialog as fd;\n"
+                "root = tk.Tk()\n"
+                "root.withdraw()\n"
+                "root.attributes('-topmost', True)\n"
+                "print(fd.askdirectory(title='Select Folder to Index'))\n"
+            )
+            result = subprocess.run(
+                [sys.executable, "-c", script], capture_output=True, text=True
+            )
+            return {"folder_path": result.stdout.strip()}
+
     except Exception as e:
         logger.error(f"Failed to open folder dialog: {e}")
         return {"folder_path": ""}
