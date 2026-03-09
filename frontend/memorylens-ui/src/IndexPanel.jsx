@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
+const API_BASE = 'http://localhost:8000';
+
 function IndexPanel({ onIndexComplete, mode = 'both' }) {
   const [folderPath, setFolderPath] = useState('');
   const [indexing, setIndexing] = useState(false);
@@ -9,11 +11,11 @@ function IndexPanel({ onIndexComplete, mode = 'both' }) {
 
   const handleSelectFolder = async () => {
     try {
-      const res = await fetch('/api/select-folder');
+      const res = await fetch(`${API_BASE}/api/select-folder`);
       const data = await res.json();
       if (data.folder_path) setFolderPath(data.folder_path);
     } catch (e) {
-      setFolderPath('C:\\Users\\Photos'); // dummy for testing
+      console.error('Failed to open folder dialog. Is backend running?');
     }
   };
 
@@ -24,22 +26,22 @@ function IndexPanel({ onIndexComplete, mode = 'both' }) {
     setProgress(null);
 
     try {
-      await fetch('/api/index', {
+      await fetch(`${API_BASE}/api/index`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: folderPath, mode: mode }),
       });
       startPolling();
     } catch (e) {
-      // Simulate progress for testing
-      simulateProgress();
+      console.error('Failed to start indexing. Is backend running?', e);
+      setIndexing(false);
     }
   };
 
   const startPolling = () => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch('/api/index/progress');
+        const res = await fetch(`${API_BASE}/api/index/progress`);
         const data = await res.json();
         setProgress(data);
         if (data.done) {
@@ -53,29 +55,6 @@ function IndexPanel({ onIndexComplete, mode = 'both' }) {
         setIndexing(false);
       }
     }, 800);
-  };
-
-  const simulateProgress = () => {
-    let p = 0;
-    const total = 24;
-    pollRef.current = setInterval(() => {
-      p++;
-      setProgress({
-        processed: p,
-        total,
-        indexed: p,
-        skipped: 0,
-        errors: 0,
-        done: p >= total,
-        message: p >= total ? `Done! Indexed ${total} photos (0 skipped, 0 errors)` : 'Scanning folder...',
-      });
-      if (p >= total) {
-        clearInterval(pollRef.current);
-        setIndexing(false);
-        setDone(true);
-        onIndexComplete && onIndexComplete();
-      }
-    }, 200);
   };
 
   useEffect(() => {
