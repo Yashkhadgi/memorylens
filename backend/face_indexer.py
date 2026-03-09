@@ -98,7 +98,7 @@ class FaceIndexer:
             logger.info(f"Creating collection {self.collection_id}...")
             self.client.create_collection(CollectionId=self.collection_id)
 
-    def _resize_image(image_bytes: bytes) -> bytes:
+    def _resize_image(self, image_bytes: bytes) -> bytes:
         """Resize image to fit under 5MB while preserving quality for face detection."""
         img = Image.open(BytesIO(image_bytes))
 

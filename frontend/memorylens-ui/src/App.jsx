@@ -7,7 +7,45 @@ import ResultsGrid from './ResultsGrid';
 import FaceGroups from './FaceGroups';
 import './App.css';
 
-const API_BASE = ''; // Use relative paths for unified deployment
+const API_BASE = 'http://localhost:8000'; // Hardcoded for dev connectivity, relative paths fail when npm start is on p3000
+
+// Cursor Trail
+function CursorTrail() {
+  const dotsRef = useRef([]);
+
+  useEffect(() => {
+    let mouse = { x: 0, y: 0 };
+    let trail = Array(16).fill({ x: 0, y: 0 });
+
+    const onMove = (e) => { mouse = { x: e.clientX, y: e.clientY }; };
+
+    const animate = () => {
+      trail = [mouse, ...trail.slice(0, 15)];
+      trail.forEach((pos, i) => {
+        const dot = dotsRef.current[i];
+        if (dot) {
+          dot.style.left = `${pos.x}px`;
+          dot.style.top = `${pos.y}px`;
+          dot.style.opacity = `${(1 - i / 16) * 0.6}`;
+          dot.style.transform = `translate(-50%, -50%) scale(${1 - i / 20})`;
+        }
+      });
+      requestAnimationFrame(animate);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    animate();
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
+  return (
+    <div className="cursor-trail">
+      {Array(16).fill(0).map((_, i) => (
+        <div key={i} ref={el => dotsRef.current[i] = el} className="trail-dot" />
+      ))}
+    </div>
+  );
+}
 
 // Particles
 function Particles() {
@@ -48,6 +86,36 @@ function Toast({ toasts }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// Typewriter
+function Typewriter({ texts }) {
+  const [display, setDisplay] = useState('');
+  const [idx, setIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const current = texts[idx];
+    let timeout;
+    if (!deleting && charIdx < current.length) {
+      timeout = setTimeout(() => { setDisplay(current.slice(0, charIdx + 1)); setCharIdx(c => c + 1); }, 55);
+    } else if (!deleting && charIdx === current.length) {
+      timeout = setTimeout(() => setDeleting(true), 2000);
+    } else if (deleting && charIdx > 0) {
+      timeout = setTimeout(() => { setDisplay(current.slice(0, charIdx - 1)); setCharIdx(c => c - 1); }, 30);
+    } else if (deleting && charIdx === 0) {
+      setDeleting(false);
+      setIdx(i => (i + 1) % texts.length);
+    }
+    return () => clearTimeout(timeout);
+  }, [charIdx, deleting, idx, texts]);
+
+  return (
+    <span className="typewriter">
+      {display}<span className="cursor-blink">|</span>
+    </span>
   );
 }
 
@@ -97,25 +165,16 @@ function App() {
   const [mode, setMode] = useState('doc');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isIndexing, setIsIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState(null);
-  const [searchStats, setSearchStats] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
   const toastId = useRef(0);
-  const pollRef = useRef(null);
 
   // Apply dark/light mode to body
   useEffect(() => {
     document.body.classList.toggle('light', !darkMode);
   }, [darkMode]);
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
 
   const addToast = (message, type = 'warning') => {
     const id = toastId.current++;
@@ -125,40 +184,14 @@ function App() {
     }, 3500);
   };
 
-  // ── Poll indexing progress ──────────────────────────
-  const startPolling = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await axios.get(`${API_BASE}/api/index/progress`);
-        const data = res.data;
-        setIndexProgress(data);
-
-        // Stop polling when done
-        if (data.done) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-          setIsIndexing(false);
-          addToast(
-            `✅ Indexed ${data.indexed} photos (${data.skipped} skipped, ${data.errors} errors)`,
-            'success'
-          );
-        }
-      } catch {
-        // Backend might not be ready yet, keep polling
-      }
-    }, 500); // Poll every 500ms
-  };
 
   // ── Document Search ─────────────────────────────────
   const handleDocSearch = async (query) => {
     setIsLoading(true);
     setResults([]);
-    setSearchStats(null);
     try {
       const res = await axios.get(`${API_BASE}/api/search/docs`, {
-        params: { query },
+        params: { q: query },
       });
       setResults(res.data.results || []);
       addToast(`✅ Found ${res.data.results.length} results`, 'success');
@@ -176,13 +209,11 @@ function App() {
   const handleFaceSearch = async (file) => {
     setIsLoading(true);
     setResults([]);
-    setSearchStats(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
       const res = await axios.post(`${API_BASE}/api/search/faces`, formData);
       setResults(res.data.results || []);
-      setSearchStats(res.data.stats || null);
       addToast(`✅ Found ${res.data.results?.length || 0} matching faces`, 'success');
     } catch (e) {
       addToast('⚠️ Backend not connected. Is the server running?', 'warning');
@@ -190,42 +221,11 @@ function App() {
     setIsLoading(false);
   };
 
-  // ── Index Folder ────────────────────────────────────
-  const handleIndexFolder = async () => {
-    addToast('🗂️ Please select a folder in the popup window...', 'info');
 
-    try {
-      // 1. Ask backend to open native folder picker
-      const dialogRes = await axios.get(`${API_BASE}/api/select-folder`);
-      const folderPath = dialogRes.data.folder_path;
-
-      if (!folderPath) {
-        addToast('Selection canceled.', 'info');
-        return;
-      }
-
-      setIsIndexing(true);
-      setIndexProgress({ is_running: true, processed: 0, total: 0, done: false, message: 'Starting...' });
-
-      // 2. Start indexing with the selected path
-      await axios.post(`${API_BASE}/api/index`, {
-        folder_path: folderPath.trim(),
-      });
-      // Start polling for progress
-      startPolling();
-    } catch (e) {
-      setIsIndexing(false);
-      setIndexProgress(null);
-      if (e.response?.status === 409) {
-        addToast('⚠️ Indexing already in progress!', 'warning');
-      } else {
-        addToast('⚠️ Failed to start indexing.', 'warning');
-      }
-    }
-  };
 
   return (
     <>
+      <CursorTrail />
       <Particles />
 
       {/* Dark/Light Toggle */}
@@ -236,7 +236,14 @@ function App() {
       <div className="app">
         <div className="header">
           <h1>🧠 MemoryLens</h1>
-          <p>Search your files by face or memory</p>
+          <p>
+            <Typewriter texts={[
+              'Search your files by face or memory.',
+              'Powered by AI. Built for humans.',
+              'Find anything. Instantly.',
+              'Your memory. Supercharged.',
+            ]} />
+          </p>
         </div>
 
         {/* Indexing Progress Bar */}
@@ -246,14 +253,14 @@ function App() {
           <button
             id="doc-search-tab"
             className={mode === 'doc' ? 'active' : ''}
-            onClick={() => { setMode('doc'); setResults([]); setSearchStats(null); }}
+            onClick={() => { setMode('doc'); setResults([]); }}
           >
             📄 Document Search
           </button>
           <button
             id="face-search-tab"
             className={mode === 'face' ? 'active' : ''}
-            onClick={() => { setMode('face'); setResults([]); setSearchStats(null); }}
+            onClick={() => { setMode('face'); setResults([]); }}
           >
             📸 Face Search
           </button>
@@ -276,22 +283,7 @@ function App() {
           </div>
         )}
 
-        {!isLoading && searchStats && mode === 'face' && (
-          <div className="search-stats-container">
-            <div className="stat-card">
-              <span className="stat-value">{searchStats.total_indexed}</span>
-              <span className="stat-label">Total Indexed</span>
-            </div>
-            <div className="stat-card match">
-              <span className="stat-value">{searchStats.found}</span>
-              <span className="stat-label">Matches Found</span>
-            </div>
-            <div className="stat-card no-match">
-              <span className="stat-value">{searchStats.not_match}</span>
-              <span className="stat-label">Did Not Match</span>
-            </div>
-          </div>
-        )}
+
 
         {!isLoading && results.length > 0 && mode === 'doc' && (
           <ResultsGrid results={results} mode={mode} />

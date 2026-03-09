@@ -195,16 +195,13 @@ def select_folder():
         return {"folder_path": ""}
 
 
-# ── Index Folder (starts background task) ────────────────
 @app.post("/api/index")
 async def index_folder(request: IndexRequest = None):
     """Start indexing documents and photos in the given folder (runs in background)."""
-    # Fallback to sample_data/docs if no folder provided (for compatibility)
     if not request or not request.folder_path:
-        base_path = os.path.join(os.path.dirname(__file__), '..', 'sample_data')
-        folder = os.path.join(base_path, 'docs')
-    else:
-        folder = request.folder_path
+        raise HTTPException(status_code=400, detail="Folder path is required for indexing.")
+        
+    folder = request.folder_path
 
     if not os.path.isdir(folder):
         raise HTTPException(status_code=400, detail=f"Folder not found: {folder}")
