@@ -185,16 +185,22 @@ def select_folder():
 
     try:
         if system == "Darwin":
-            # macOS: Use AppleScript — tkinter fails in subprocess on Mac
+            # macOS: Use AppleScript — bring dialog to front
+            apple_script = '''
+                tell application "System Events"
+                    activate
+                end tell
+                set theFolder to POSIX path of (choose folder with prompt "Select Folder to Index")
+                return theFolder
+            '''
+            logger.info("Opening macOS folder dialog...")
             result = subprocess.run(
-                [
-                    "osascript", "-e",
-                    'set theFolder to POSIX path of (choose folder with prompt "Select Folder to Index")',
-                ],
+                ["osascript", "-e", apple_script],
                 capture_output=True, text=True, timeout=120,
             )
             folder = result.stdout.strip()
-            # User cancelled → osascript returns error, stdout is empty
+            logger.info(f"Folder selected: '{folder}', stderr: '{result.stderr.strip()}'")
+            # User cancelled → osascript returns error code, stdout is empty
             return {"folder_path": folder}
 
         else:
@@ -340,15 +346,30 @@ def get_stats():
 @app.get("/api/open-file")
 def open_file(path: str):
     try:
+        logger.info(f"Open file request: {path}")
+
+        if not path or not path.strip():
+            return {"success": False, "error": "No file path provided"}
+
+        # Normalize the path (resolve ~, .., etc.)
+        resolved = os.path.expanduser(path.strip())
+
+        if not os.path.exists(resolved):
+            logger.error(f"File not found: {resolved}")
+            return {"success": False, "error": f"File not found: {resolved}"}
+
         system = platform.system()
         if system == 'Windows':
-            os.startfile(path)
+            os.startfile(resolved)
         elif system == 'Darwin':  # Mac
-            subprocess.run(['open', path])
+            subprocess.Popen(['open', resolved])
         else:  # Linux
-            subprocess.run(['xdg-open', path])
-        return {"success": True, "message": f"Opened: {path}"}
+            subprocess.Popen(['xdg-open', resolved])
+
+        logger.info(f"Opened file: {resolved}")
+        return {"success": True, "message": f"Opened: {resolved}"}
     except Exception as e:
+        logger.error(f"Failed to open file: {e}")
         return {"success": False, "error": str(e)}
 
 # ── Web Search Links — Spotlight Style ────────────────────
