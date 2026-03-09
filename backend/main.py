@@ -159,9 +159,9 @@ def run_indexing(folder_path: str, mode: str = "both"):
         logger.error(f"Indexing failed: {e}")
 
 
-# ── Health Check ─────────────────────────────────────────
-@app.get("/")
-def home():
+# ── API Status ───────────────────────────────────────────
+@app.get("/api/status")
+def get_api_status():
     return {
         "status": "MemoryLens API is running ✅",
         "version": "1.0.0",
@@ -381,12 +381,12 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 
 # 2. Serve the index.html for the root and any other non-API routes
 @app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
+async def serve_frontend(full_path: str = ""):
     # Only serve index.html if the path doesn't start with /api
-    if full_path.startswith("api"):
+    if full_path and full_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API route not found")
     
     index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return {"error": "Frontend build not found. Run 'npm run build' first."}
+    return {"error": "Frontend build not found. Please ensure 'backend/static/index.html' exists."}
