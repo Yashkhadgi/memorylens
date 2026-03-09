@@ -28,12 +28,28 @@ class FaceIndexer:
     """Indexes photos into an AWS Rekognition face collection using parallel processing."""
 
     # All image formats we can handle (convert to JPEG for Rekognition)
+    # Comprehensive list — covers virtually every common image format
     SUPPORTED_EXTENSIONS = {
-        ".jpg", ".jpeg", ".png",          # Native Rekognition support
-        ".heic", ".heif",                   # Apple photos (needs pillow-heif)
-        ".webp", ".bmp", ".tiff", ".gif",  # Common formats (auto-converted)
+        # Native Rekognition support
+        ".jpg", ".jpeg", ".png",
+        # Apple photos (needs pillow-heif)
+        ".heic", ".heif",
+        # Common web/desktop formats
+        ".webp", ".bmp", ".tiff", ".tif", ".gif",
+        # JPEG variants
+        ".jfif", ".jpe", ".jp2", ".j2k", ".jpx",
+        # Modern formats
+        ".avif",
+        # Icons & cursors
+        ".ico", ".cur",
+        # Legacy / specialized formats
+        ".tga", ".pcx", ".ppm", ".pgm", ".pbm", ".pnm",
+        ".dib", ".dds", ".sgi", ".rgb", ".rgba",
+        # RAW camera formats (requires rawpy or Pillow raw plugin)
+        ".dng", ".cr2", ".cr3", ".nef", ".arw", ".orf",
+        ".rw2", ".raf", ".srw", ".pef", ".raw",
     }
-    # Formats Rekognition accepts directly
+    # Formats Rekognition accepts directly (no conversion needed)
     NATIVE_FORMATS = {".jpg", ".jpeg", ".png"}
 
     def __init__(self):
@@ -86,7 +102,10 @@ class FaceIndexer:
                 quality = 85
 
     def _prepare_image(self, file_path: str) -> bytes:
-        """Read image, convert format if needed, and resize if >5MB."""
+        """Read image, convert format if needed, and resize if >5MB.
+
+        Handles ALL image formats Pillow can open — converts everything to JPEG.
+        """
         ext = os.path.splitext(file_path)[1].lower()
 
         # HEIC check
@@ -97,8 +116,15 @@ class FaceIndexer:
         # If format is not natively supported by Rekognition, convert to JPEG
         if ext not in self.NATIVE_FORMATS:
             logger.info(f"Converting {ext} → JPEG: {file_path}")
-            img = Image.open(file_path)
-            if img.mode in ("RGBA", "P"):
+            try:
+                img = Image.open(file_path)
+                img.load()  # Force read so corrupt files fail here
+            except Exception as e:
+                logger.error(f"Cannot open image {file_path}: {e}")
+                raise ValueError(f"Cannot open image: {e}")
+            if img.mode in ("RGBA", "P", "LA", "PA"):
+                img = img.convert("RGB")
+            elif img.mode != "RGB":
                 img = img.convert("RGB")
             buffer = BytesIO()
             img.save(buffer, format="JPEG", quality=85)
@@ -113,6 +139,16 @@ class FaceIndexer:
             image_bytes = self._resize_image(image_bytes)
 
         return image_bytes
+
+    @staticmethod
+    def _is_valid_image(file_path: str) -> bool:
+        """Check if a file can be opened by Pillow (fallback for unknown extensions)."""
+        try:
+            img = Image.open(file_path)
+            img.verify()  # Quick check without fully loading
+            return True
+        except Exception:
+            return False
 
     def index_photo(self, file_path: str, client=None) -> bool:
         """Index a single photo into the Rekognition collection.
@@ -172,6 +208,10 @@ class FaceIndexer:
     ) -> dict:
         """Walk folder and index all photos in parallel.
 
+        Uses the SUPPORTED_EXTENSIONS allowlist first, then falls back to
+        Pillow-based detection for any unrecognized extension so NO image
+        file is silently skipped.
+
         Args:
             folder_path: Path to folder containing photos.
             max_workers: Number of parallel threads (default 10).
@@ -185,8 +225,23 @@ class FaceIndexer:
         for root, _, files in os.walk(folder_path):
             for filename in files:
                 ext = os.path.splitext(filename)[1].lower()
+                full_path = os.path.join(root, filename)
+
                 if ext in self.SUPPORTED_EXTENSIONS:
-                    image_files.append(os.path.join(root, filename))
+                    # Known image extension — include directly
+                    image_files.append(full_path)
+                elif ext and ext not in {".txt", ".pdf", ".docx", ".xlsx",
+                                          ".csv", ".json", ".xml", ".html",
+                                          ".md", ".log", ".zip", ".tar",
+                                          ".gz", ".mp4", ".avi", ".mov",
+                                          ".mp3", ".wav", ".py", ".js",
+                                          ".ini", ".cfg", ".yaml", ".yml",
+                                          ".db", ".sqlite", ".exe", ".dll",
+                                          ".so", ".sh", ".bat", ".cmd"}:
+                    # Unknown extension — try Pillow as fallback
+                    if self._is_valid_image(full_path):
+                        logger.info(f"Detected image via Pillow fallback: {filename} ({ext})")
+                        image_files.append(full_path)
 
         total = len(image_files)
         if total == 0:

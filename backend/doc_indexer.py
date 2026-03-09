@@ -33,23 +33,50 @@ doc_index = faiss.IndexFlatIP(EMBEDDING_DIM)
 doc_meta = []  # list of {path, filename, snippet}
 
 def extract_text_local(file_path: str) -> str:
-    """Extract text from PDF, DOCX, TXT locally"""
+    """Extract text from PDF, DOCX, PPTX, XLSX, TXT and more."""
     path = Path(file_path)
+    ext = path.suffix.lower()
 
     try:
-        if path.suffix.lower() == '.pdf':
+        if ext == '.pdf':
             import fitz  # PyMuPDF
             doc = fitz.open(file_path)
             text = " ".join(page.get_text() for page in doc)
             doc.close()
             return text
 
-        elif path.suffix.lower() in ['.docx', '.doc']:
+        elif ext in ('.docx', '.doc'):
             from docx import Document
             doc = Document(file_path)
             return " ".join(para.text for para in doc.paragraphs)
 
-        elif path.suffix.lower() == '.txt':
+        elif ext == '.pptx':
+            from pptx import Presentation
+            prs = Presentation(file_path)
+            texts = []
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        texts.append(shape.text_frame.text)
+                    if shape.has_table:
+                        for row in shape.table.rows:
+                            for cell in row.cells:
+                                texts.append(cell.text)
+            return " ".join(texts)
+
+        elif ext in ('.xlsx', '.xls'):
+            from openpyxl import load_workbook
+            wb = load_workbook(file_path, read_only=True, data_only=True)
+            texts = []
+            for ws in wb.worksheets:
+                for row in ws.iter_rows(values_only=True):
+                    row_text = " ".join(str(cell) for cell in row if cell is not None)
+                    if row_text.strip():
+                        texts.append(row_text)
+            wb.close()
+            return " ".join(texts)
+
+        elif ext in ('.txt', '.md', '.csv', '.log', '.json', '.xml', '.html'):
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 return f.read()
 
@@ -142,7 +169,7 @@ def index_docs_folder(folder_path: str):
     global doc_index, doc_meta
 
     folder = Path(folder_path)
-    doc_extensions = {'.pdf', '.docx', '.doc', '.txt', '.md', '.csv'}
+    doc_extensions = {'.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.pptx', '.ppt', '.xlsx', '.xls'}
 
     total = 0
     success = 0
