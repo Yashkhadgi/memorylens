@@ -4,6 +4,7 @@ import SearchBar from './SearchBar';
 import UploadPanel from './UploadPanel';
 import IndexPanel from './IndexPanel';
 import ResultsGrid from './ResultsGrid';
+import FaceGroups from './FaceGroups';
 import './App.css';
 
 const API_BASE = ''; // Use relative paths for unified deployment
@@ -292,8 +293,13 @@ function App() {
           </div>
         )}
 
-        {!isLoading && results.length > 0 && (
+        {!isLoading && results.length > 0 && mode === 'doc' && (
           <ResultsGrid results={results} mode={mode} />
+        )}
+
+        {/* Face Search results are now groups — show them using FaceGroups */}
+        {!isLoading && results.length > 0 && mode === 'face' && (
+          <FaceGroups searchResults={results} />
         )}
 
         {!isLoading && results.length === 0 && (
@@ -303,6 +309,9 @@ function App() {
               : '📸 Upload a photo to find matching faces'}
           </div>
         )}
+
+        {/* Default Face Groups — shown on face tab when NOT searching */}
+        {mode === 'face' && !isLoading && results.length === 0 && <FaceGroups />}
       </div>
 
 
