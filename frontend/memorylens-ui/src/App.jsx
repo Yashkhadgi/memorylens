@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import SearchBar from './SearchBar';
 import UploadPanel from './UploadPanel';
+import IndexPanel from './IndexPanel';
 import ResultsGrid from './ResultsGrid';
 import './App.css';
 
@@ -257,6 +258,9 @@ function App() {
           </button>
         </div>
 
+        {/* Index Panel — paste/browse folder to index */}
+        <IndexPanel onIndexComplete={() => addToast('✅ Indexing complete!', 'success')} />
+
         <div className="search-panel">
           {mode === 'doc'
             ? <SearchBar onSearch={handleDocSearch} isLoading={isLoading} />
@@ -301,15 +305,7 @@ function App() {
         )}
       </div>
 
-      {/* Index Folder FAB */}
-      <button
-        id="index-folder-btn"
-        className="fab"
-        onClick={handleIndexFolder}
-        disabled={isIndexing}
-      >
-        {isIndexing ? '⏳' : '📁'} {isIndexing ? 'Indexing...' : 'Index Folder'}
-      </button>
+
 
       <Toast toasts={toasts} />
     </>

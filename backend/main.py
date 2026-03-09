@@ -11,7 +11,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
 from fastapi.responses import FileResponse
+<<<<<<< HEAD
 from fastapi.staticfiles import StaticFiles
+=======
+>>>>>>> main
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -47,12 +50,13 @@ state_lock = threading.Lock()
 # ── Request Models ───────────────────────────────────────
 class IndexRequest(BaseModel):
     folder_path: str
+    mode: str = "both"  # 'doc', 'face', or 'both'
 
 
 # ── Lifespan ─────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize services on startup."""
+    """Initialize services on startup. Resets face collection for a clean session."""
     global face_indexer, face_searcher
 
     print("🚀 MemoryLens API starting...")
@@ -60,6 +64,26 @@ async def lifespan(app: FastAPI):
 
     face_indexer = FaceIndexer()
     face_searcher = FaceSearcher()
+
+    # ── Auto-reset Rekognition collection on startup ──
+    # This ensures no stale face data from other machines/sessions
+    collection_id = face_indexer.collection_id
+    rek_client = face_indexer.client
+    try:
+        rek_client.delete_collection(CollectionId=collection_id)
+        logger.info(f"🗑️ Deleted existing collection: {collection_id}")
+    except rek_client.exceptions.ResourceNotFoundException:
+        logger.info(f"No existing collection to delete: {collection_id}")
+    except Exception as e:
+        logger.warning(f"Could not delete collection: {e}")
+
+    try:
+        rek_client.create_collection(CollectionId=collection_id)
+        logger.info(f"✅ Created fresh collection: {collection_id}")
+    except rek_client.exceptions.ResourceAlreadyExistsException:
+        logger.info(f"Collection already exists: {collection_id}")
+    except Exception as e:
+        logger.error(f"Failed to create collection: {e}")
 
     logger.info("✅ MemoryLens API ready — both pipelines operational!")
     yield
@@ -84,36 +108,48 @@ def on_progress(processed: int, total: int):
         indexing_state["total"] = total
 
 
-def run_indexing(folder_path: str):
-    """Background thread: runs the actual indexing."""
+def run_indexing(folder_path: str, mode: str = "both"):
+    """Background thread: runs the actual indexing based on mode."""
     global indexing_state
     try:
-        # 1. Index Documents (Synchronous for now)
-        logger.info(f"Indexing documents in {folder_path}...")
-        doc_result = 0
-        if os.path.exists(folder_path):
-            doc_result = doc_indexer.index_docs_folder(folder_path)
+        doc_count = 0
+        face_result = {"indexed": 0, "skipped": 0, "errors": 0}
 
-        # 2. Index Faces (Asynchronous with progress)
-        logger.info(f"Indexing faces in {folder_path}...")
-        face_result = face_indexer.index_folder(
-            folder_path,
-            max_workers=10,
-            progress_callback=on_progress,
-        )
+        # Index Documents (only for 'doc' or 'both' mode)
+        if mode in ('doc', 'both') and os.path.exists(folder_path):
+            logger.info(f"Indexing documents in {folder_path}...")
+            result = doc_indexer.index_docs_folder(folder_path)
+            doc_count = result.get("indexed", 0) if isinstance(result, dict) else result
+
+        # Index Faces (only for 'face' or 'both' mode)
+        if mode in ('face', 'both'):
+            logger.info(f"Indexing faces in {folder_path}...")
+            face_result = face_indexer.index_folder(
+                folder_path,
+                max_workers=10,
+                progress_callback=on_progress,
+            )
 
         with state_lock:
-            indexing_state["indexed"] = face_result["indexed"]
+            indexing_state["indexed"] = face_result["indexed"] + doc_count
             indexing_state["skipped"] = face_result["skipped"]
             indexing_state["errors"] = face_result["errors"]
             indexing_state["done"] = True
             indexing_state["is_running"] = False
-            indexing_state["message"] = (
-                f"Done! Indexed {face_result['indexed']} photos "
-                f"({face_result['skipped']} skipped, {face_result['errors']} errors) "
-                f"and {doc_result} docs"
-            )
-        logger.info(f"Indexing complete: Faces={face_result}, Docs={doc_result}")
+
+            if mode == 'doc':
+                indexing_state["message"] = f"Done! Indexed {doc_count} documents"
+            elif mode == 'face':
+                indexing_state["message"] = (
+                    f"Done! Indexed {face_result['indexed']} photos "
+                    f"({face_result['skipped']} skipped, {face_result['errors']} errors)"
+                )
+            else:
+                indexing_state["message"] = (
+                    f"Done! Indexed {face_result['indexed']} photos & {doc_count} docs"
+                )
+
+        logger.info(f"Indexing complete: mode={mode}, Faces={face_result}, Docs={doc_count}")
 
     except Exception as e:
         with state_lock:
@@ -190,7 +226,8 @@ async def index_folder(request: IndexRequest = None):
         })
 
     # Start background thread
-    thread = threading.Thread(target=run_indexing, args=(folder,), daemon=True)
+    index_mode = request.mode if request else "both"
+    thread = threading.Thread(target=run_indexing, args=(folder,index_mode), daemon=True)
     thread.start()
 
     return {"status": "indexing_started", "message": "Indexing started in background"}
@@ -218,7 +255,7 @@ def get_index_progress():
 async def search_faces(file: UploadFile = File(...)):
     """Upload a reference photo to find matching faces."""
     image_bytes = await file.read()
-    results = face_searcher.search_by_face(image_bytes)
+    results = face_searcher.search_by_face(image_bytes, threshold=95.0)
     total_indexed = face_searcher.get_total_faces()
     
     return {
@@ -230,6 +267,22 @@ async def search_faces(file: UploadFile = File(...)):
             "not_match": max(0, total_indexed - len(results))
         }
     }
+
+
+# ── Face Groups (Google Photos-style) ────────────────────
+@app.get("/api/faces/groups")
+async def get_face_groups():
+    """Get all indexed faces grouped by person."""
+    try:
+        groups = face_searcher.group_faces(threshold=95.0)
+        return {
+            "success": True,
+            "total_people": len(groups),
+            "groups": groups,
+        }
+    except Exception as e:
+        logger.error(f"Face grouping error: {e}")
+        return {"success": False, "error": str(e), "groups": []}
 
 
 # ── Document Search ───────────────────────────────────────
@@ -306,6 +359,20 @@ def web_search_links(q: str, mode: str = "doc"):
         "mode": mode,
         "links": face_links if mode == "face" else doc_links
     }
+
+# ── Serve Local Image ────────────────────────────────────
+@app.get("/api/image")
+def serve_image(path: str):
+    """Serve a local image file so the frontend can display it."""
+    import mimetypes
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    mime, _ = mimetypes.guess_type(path)
+    if not mime or not mime.startswith("image"):
+        # Try to serve anyway — browser will handle it
+        mime = "application/octet-stream"
+    return FileResponse(path, media_type=mime)
+
 
 # ── Serve Frontend ───────────────────────────────────────
 # 1. Mount the static directory for CSS/JS/Images

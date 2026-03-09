@@ -3,6 +3,7 @@ import SearchBar from './SearchBar';
 import UploadPanel from './UploadPanel';
 import ResultsGrid from './ResultsGrid';
 import IndexPanel from './IndexPanel';
+import FaceGroups from './FaceGroups';
 import './App.css';
 
 // Cursor Trail
@@ -169,14 +170,13 @@ function App() {
       });
       const data = await res.json();
       setResults(data.results || []);
-      addToast(`✅ Found ${data.results.length} matching faces`, 'success');
+      
+      // Calculate total matched faces across all groups
+      const totalFaces = (data.results || []).reduce((sum, g) => sum + g.faces.length, 0);
+      addToast(`✅ Found ${totalFaces} matching faces across ${data.results?.length || 0} people`, 'success');
     } catch (e) {
-      addToast('⚠️ Backend not connected — showing dummy results', 'warning');
-      setResults([
-        { filename: 'photo_001.jpg', score: 98.5 },
-        { filename: 'photo_045.jpg', score: 94.2 },
-        { filename: 'photo_112.jpg', score: 88.7 },
-      ]);
+      addToast('⚠️ Backend not connected or search failed', 'warning');
+      setResults([]);
     }
     setLoading(false);
   };
@@ -218,15 +218,13 @@ function App() {
           </button>
         </div>
 
+        {/* Index Panel — pass mode so each tab indexes the right pipeline */}
+        <IndexPanel mode={mode} onIndexComplete={() => addToast('✅ Indexing complete!', 'success')} />
+
         <div className="search-panel">
           {mode === 'doc'
             ? <SearchBar onSearch={handleDocSearch} />
-            : (
-              <>
-                <IndexPanel onIndexComplete={() => addToast('✅ Photos indexed! Face search is ready.', 'success')} />
-                <UploadPanel onSearch={handleFaceSearch} />
-              </>
-            )
+            : <UploadPanel onSearch={handleFaceSearch} />
           }
         </div>
 
@@ -242,8 +240,13 @@ function App() {
           </div>
         )}
 
-        {!loading && results.length > 0 && (
-          <ResultsGrid results={results} mode={mode} query={query} />  // ← query prop added
+        {!loading && results.length > 0 && mode === 'doc' && (
+          <ResultsGrid results={results} mode={mode} query={query} />
+        )}
+
+        {/* Face Search results are now groups — show them using FaceGroups */}
+        {!loading && results.length > 0 && mode === 'face' && (
+          <FaceGroups searchResults={results} />
         )}
 
         {!loading && results.length === 0 && (
@@ -253,6 +256,9 @@ function App() {
               : '📸 Upload a photo to find matching faces'}
           </div>
         )}
+
+        {/* Default Face Groups — shown on face tab when NOT searching */}
+        {mode === 'face' && !loading && results.length === 0 && <FaceGroups />}
       </div>
 
       <Toast toasts={toasts} />

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-function IndexPanel({ onIndexComplete }) {
+function IndexPanel({ onIndexComplete, mode = 'both' }) {
   const [folderPath, setFolderPath] = useState('');
   const [indexing, setIndexing] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -27,7 +27,7 @@ function IndexPanel({ onIndexComplete }) {
       await fetch('/api/index', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder_path: folderPath }),
+        body: JSON.stringify({ folder_path: folderPath, mode: mode }),
       });
       startPolling();
     } catch (e) {
@@ -91,8 +91,8 @@ function IndexPanel({ onIndexComplete }) {
       <div className="index-header">
         <span className="index-icon">📁</span>
         <div>
-          <p className="index-title">Index Your Photos</p>
-          <p className="index-subtitle">Point to a folder to make it searchable by face</p>
+          <p className="index-title">{mode === 'face' ? 'Index Your Photos' : mode === 'doc' ? 'Index Your Documents' : 'Index Your Files'}</p>
+          <p className="index-subtitle">{mode === 'face' ? 'Select a folder with photos to scan faces' : mode === 'doc' ? 'Select a folder with documents to index' : 'Select a folder to index documents & photos'}</p>
         </div>
       </div>
 
@@ -138,7 +138,7 @@ function IndexPanel({ onIndexComplete }) {
             <span>✅ {progress.indexed} indexed</span>
             <span>⏭️ {progress.skipped} skipped</span>
             <span>❌ {progress.errors} errors</span>
-            <span>📸 {progress.processed}/{progress.total} photos</span>
+            <span>📄 {progress.processed}/{progress.total} files</span>
           </div>
         </div>
       )}
