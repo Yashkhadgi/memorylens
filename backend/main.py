@@ -11,10 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
 from fastapi.responses import FileResponse
-<<<<<<< HEAD
 from fastapi.staticfiles import StaticFiles
-=======
->>>>>>> main
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
