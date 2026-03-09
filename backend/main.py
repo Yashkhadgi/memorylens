@@ -120,6 +120,9 @@ def run_indexing(folder_path: str, mode: str = "both"):
 
         # Index Faces (only for 'face' or 'both' mode)
         if mode in ('face', 'both'):
+            logger.info("Resetting Face Collection before indexing...")
+            face_indexer.reset_collection()
+            
             logger.info(f"Indexing faces in {folder_path}...")
             face_result = face_indexer.index_folder(
                 folder_path,

@@ -164,9 +164,22 @@ def index_single_doc(file_path: str):
     print(f"  ✅ Indexed: {Path(file_path).name}")
     return True
 
+def clear_index():
+    """Clear all existing indexed documents from memory and disk."""
+    global doc_index, doc_meta
+    print("🧹 Clearing existing document index...")
+    doc_index = faiss.IndexFlatL2(512)
+    doc_meta = []
+    if os.path.exists(INDEX_PATH):
+        os.remove(INDEX_PATH)
+    if os.path.exists(META_PATH):
+        os.remove(META_PATH)
+
 def index_docs_folder(folder_path: str):
     """Index all documents in a folder"""
     global doc_index, doc_meta
+
+    clear_index()
 
     folder = Path(folder_path)
     doc_extensions = {'.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.pptx', '.ppt', '.xlsx', '.xls'}

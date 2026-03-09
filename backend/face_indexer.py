@@ -75,7 +75,29 @@ class FaceIndexer:
             region_name=self._region,
         )
 
-    @staticmethod
+    def reset_collection(self):
+        """Delete and recreate the face collection to purge old data."""
+        logger.info(f"🧹 Resetting collection: {self.collection_id}...")
+        try:
+            self.client.delete_collection(CollectionId=self.collection_id)
+            logger.info("Deleted existing collection.")
+        except self.client.exceptions.ResourceNotFoundException:
+            pass  # It didn't exist yet, that's fine
+            
+        try:
+            self.client.create_collection(CollectionId=self.collection_id)
+            logger.info("Created new collection successfully.")
+        except Exception as e:
+            logger.error(f"Failed to create collection: {e}")
+
+    def create_collection_if_missing(self):
+        """Ensure the Rekognition collection exists."""
+        try:
+            self.client.describe_collection(CollectionId=self.collection_id)
+        except self.client.exceptions.ResourceNotFoundException:
+            logger.info(f"Creating collection {self.collection_id}...")
+            self.client.create_collection(CollectionId=self.collection_id)
+
     def _resize_image(image_bytes: bytes) -> bytes:
         """Resize image to fit under 5MB while preserving quality for face detection."""
         img = Image.open(BytesIO(image_bytes))
