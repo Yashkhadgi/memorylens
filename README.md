@@ -99,12 +99,35 @@ memorylens/
 
 ## Tech stack
 
-- **Frontend:** React (CRA), Axios
-- **Backend:** FastAPI, Uvicorn
-- **Vector Search:** FAISS
-- **Document parsing:** PyMuPDF, python-docx, python-pptx, openpyxl
-- **Image processing:** Pillow (+ optional pillow-heif)
-- **Cloud AI connectors (current implementation):** Rekognition, Textract, Bedrock embeddings
+### 🎨 Frontend
+
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Create React App](https://img.shields.io/badge/Create%20React%20App-CRA-09D3AC?style=for-the-badge&logo=createreactapp&logoColor=black)
+![Axios](https://img.shields.io/badge/Axios-HTTP%20Client-5A29E4?style=for-the-badge&logo=axios&logoColor=white)
+
+### ⚙️ Backend
+
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI%20Server-2C3E50?style=for-the-badge&logo=gunicorn&logoColor=white)
+
+### 🧠 AI, Search & Indexing
+
+![FAISS](https://img.shields.io/badge/FAISS-Vector%20Search-0467DF?style=for-the-badge)
+![NumPy](https://img.shields.io/badge/NumPy-Numerics-013243?style=for-the-badge&logo=numpy&logoColor=white)
+![Boto3](https://img.shields.io/badge/Boto3-AWS%20SDK-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
+![Amazon Rekognition](https://img.shields.io/badge/Amazon%20Rekognition-Face%20Recognition-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
+![Amazon Textract](https://img.shields.io/badge/Amazon%20Textract-OCR-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
+![Amazon Bedrock](https://img.shields.io/badge/Amazon%20Bedrock-Embeddings-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
+
+### 📄 Document & Image Processing
+
+![PyMuPDF](https://img.shields.io/badge/PyMuPDF-PDF%20Parsing-4B5563?style=for-the-badge)
+![python-docx](https://img.shields.io/badge/python--docx-DOCX%20Parsing-2563EB?style=for-the-badge)
+![python-pptx](https://img.shields.io/badge/python--pptx-PPTX%20Parsing-D97706?style=for-the-badge)
+![openpyxl](https://img.shields.io/badge/openpyxl-XLSX%20Parsing-16A34A?style=for-the-badge)
+![Pillow](https://img.shields.io/badge/Pillow-Image%20Processing-8B5CF6?style=for-the-badge)
+![pillow-heif](https://img.shields.io/badge/pillow--heif-HEIC%20Support-7C3AED?style=for-the-badge)
 
 > Note: This README is intentionally generalized for hackathons. The current implementation uses cloud connectors, but the architecture can be adapted to alternate providers.
 
