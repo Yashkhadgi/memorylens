@@ -7,3 +7,9 @@ node_modules/
 *.faiss
 *.pkl
 sample_data/
+sample_data copy/**
+!sample_data copy/docs/
+!sample_data copy/photos/
+!sample_data copy/docs/.gitkeep
+!sample_data copy/photos/.gitkeep
+sample_data_copy/
